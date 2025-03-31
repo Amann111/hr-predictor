@@ -82,6 +82,14 @@ def get_hr_score(player_id, pitcher_boost, park_factor, wind, temp):
         return round(score, 2), fb_data
     except:
         return 0, pd.DataFrame()
+def get_recent_hr_count(player_id, days=7):
+    try:
+        end_date = datetime.today()
+        start_date = end_date - timedelta(days=days)
+        data = statcast_batter(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), player_id)
+        return int(data['events'].fillna('').str.contains('home_run').sum())
+    except:
+        return 0
 
 if st.button("Run Prediction"):
     park_boost = PARK_HR_FACTORS[ballpark]
@@ -92,17 +100,19 @@ if st.button("Run Prediction"):
         if pid:
             score, fb_data = get_hr_score(pid, pitcher_boost, park_boost, wind, temp)
             results.append({
-                "Player": name.title(),
-                "HR Score": score,
-                "FB Launch Speed Avg": round(fb_data['launch_speed'].mean(), 2) if not fb_data.empty else 0,
-                "FB Launch Angle Avg": round(fb_data['launch_angle'].mean(), 2) if not fb_data.empty else 0
-            })
+                 "Player": name.title(),
+    "HR Score": score,
+    "Recent HRs (7d)": recent_hr,
+    "FB Launch Speed Avg": round(fb_data['launch_speed'].mean(), 2) if not fb_data.empty else 0,
+    "FB Launch Angle Avg": round(fb_data['launch_angle'].mean(), 2) if not fb_data.empty else 0
+})
 
     df = pd.DataFrame(results)
 
     # Display Results
     st.subheader("🔮 Predicted HR Scores")
     st.dataframe(df.sort_values("HR Score", ascending=False), use_container_width=True)
+
 
     # Betting Odds
     for row in results:
