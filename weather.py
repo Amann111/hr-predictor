@@ -2,7 +2,7 @@
 
 import requests
 
-WEATHER_API_KEY = "your_openweather_api_key_here"
+WEATHER_API_KEY = "1f520944434ebb7bec7c4c10dcae7e72"
 
 BALLPARK_LOCATIONS = {
     "coors field": (39.7562, -104.9942),
