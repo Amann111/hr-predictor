@@ -1,11 +1,16 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 from pybaseball import statcast_batter, playerid_lookup
 from datetime import datetime, timedelta
+import requests
 
-st.set_page_config(page_title="HR Predictor", layout="centered")
-st.title("⚾ Home Run Predictor")
+# ---------------------- Page Setup ---------------------- #
+st.set_page_config(page_title="HR Predictor", layout="wide")
+st.title("🏀 Home Run Predictor")
 
+# ---------------------- Configs ---------------------- #
 PLAYER_ID_OVERRIDES = {
     "shohei ohtani": 660271,
     "aaron judge": 592450,
@@ -24,8 +29,7 @@ PARK_HR_FACTORS = {
     "tropicana field": 0.80
 }
 
-DEFAULT_PLAYERS = ["Aaron Judge", "Shohei Ohtani", "Juan Soto", "Mookie Betts", "Mike Trout"]
-
+# ---------------------- Helper Functions ---------------------- #
 def get_player_id(name):
     name = name.strip().lower()
     if name in PLAYER_ID_OVERRIDES:
@@ -39,16 +43,12 @@ def get_player_id(name):
 def get_hr_score(player_id, pitcher_boost, park_factor, wind, temp):
     try:
         end_date = datetime.today()
-        start_date = end_date - timedelta(days=30)
+        start_date = end_date - timedelta(days=365)
         data = statcast_batter(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), player_id)
-
-        if data.empty:
-            st.warning(f"No data available for player ID {player_id}")
-            return 0
 
         flyballs = data[data['launch_angle'] > 10]
         if flyballs.empty:
-            return 0
+            return 0, None
 
         fb_ld = flyballs['launch_speed'].mean()
         barrel = data['barrel'].mean() if 'barrel' in data.columns else 0
@@ -60,35 +60,56 @@ def get_hr_score(player_id, pitcher_boost, park_factor, wind, temp):
         score *= 1 + (wind / 100)
         score *= 1 + ((temp - 70) / 100)
 
-        return round(score, 2)
+        return round(score, 2), flyballs
+    except:
+        return 0, None
 
-    except Exception as e:
-        st.error(f"Error fetching data for player ID {player_id}: {e}")
-        return 0
-
-# Sidebar Controls
+# ---------------------- Sidebar ---------------------- #
 st.sidebar.header("⚙️ Settings")
 pitcher_boost = st.sidebar.slider("Pitcher HR Boost (0 = elite, 10 = HR-prone)", 0, 10, 5)
 ballpark = st.sidebar.selectbox("Ballpark", list(PARK_HR_FACTORS.keys()))
 wind = st.sidebar.slider("Wind (mph)", 0, 30, 10)
 temp = st.sidebar.slider("Temperature (°F)", 40, 100, 75)
 
-# Prediction Section
-if st.button("Run Prediction"):
-    st.subheader("🔮 Predicted HR Scores")
-    with st.spinner("Fetching and scoring players..."):
-        park_boost = PARK_HR_FACTORS[ballpark]
-        results = []
+# ---------------------- Dynamic Player Input ---------------------- #
+st.subheader("🔍 Search for Players")
+players_input = st.text_input("Enter player names separated by commas", "Aaron Judge, Shohei Ohtani")
 
-        for name in DEFAULT_PLAYERS:
-            st.write(f"🔍 Scoring {name}...")
+# ---------------------- Prediction ---------------------- #
+if st.button("Run Prediction"):
+    names = [name.strip() for name in players_input.split(",") if name.strip() != ""]
+    park_boost = PARK_HR_FACTORS[ballpark]
+    results = []
+
+    with st.spinner("Scoring players..."):
+        for name in names:
             pid = get_player_id(name)
             if pid:
-                score = get_hr_score(pid, pitcher_boost, park_boost, wind, temp)
-                results.append((name, score))
+                score, fb_data = get_hr_score(pid, pitcher_boost, park_boost, wind, temp)
+                results.append({
+                    "Player": name.title(),
+                    "HR Score": score,
+                    "FB Launch Speed Avg": round(fb_data['launch_speed'].mean(), 2) if fb_data is not None else None,
+                    "FB Launch Angle Avg": round(fb_data['launch_angle'].mean(), 2) if fb_data is not None else None,
+                })
 
-        if results:
-            df = pd.DataFrame(results, columns=["Player", "HR Score"]).sort_values("HR Score", ascending=False)
-            st.table(df)
-        else:
-            st.error("No results to display.")
+    # Display Results
+    df = pd.DataFrame(results)
+    st.subheader("🔮 Predicted HR Scores")
+    st.dataframe(df.sort_values("HR Score", ascending=False), use_container_width=True)
+
+    # Export to CSV
+    csv = df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="🗃️ Download Results as CSV",
+        data=csv,
+        file_name='hr_predictions.csv',
+        mime='text/csv',
+    )
+
+    # Chart
+    st.subheader("🌐 Visualization")
+    fig, ax = plt.subplots()
+    sns.barplot(x="HR Score", y="Player", data=df.sort_values("HR Score"), ax=ax)
+    ax.set_title("Predicted HR Score by Player")
+    st.pyplot(fig)
