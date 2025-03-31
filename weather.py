@@ -1,6 +1,8 @@
+# weather.py
+
 import requests
 
-WEATHER_API_KEY = "1f520944434ebb7bec7c4c10dcae7e72"  # your actual key
+WEATHER_API_KEY = "1f520944434ebb7bec7c4c10dcae7e72"  # your API key
 
 BALLPARK_LOCATIONS = {
     "coors field": (39.7562, -104.9942),
@@ -22,4 +24,4 @@ def get_weather(ballpark):
         temp = data['main']['temp']
         return wind, temp
     except:
-        return 10, 75  # fallback
+        return 10, 75  # default fallback
