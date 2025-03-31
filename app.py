@@ -99,6 +99,7 @@ if st.button("Run Prediction"):
         pid = get_player_id(name)
         if pid:
             score, fb_data = get_hr_score(pid, pitcher_boost, park_boost, wind, temp)
+             recent_hr = get_recent_hr_count(pid)
             results.append({
                  "Player": name.title(),
     "HR Score": score,
